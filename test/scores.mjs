@@ -45,4 +45,27 @@ verifier(lotHebdo(1000000, 2000) === 200000, 'lot hebdo 20 %');
 verifier(cagnotteSaison([1000000, 1000000], 4000) === 800000, 'cagnotte cumulee 40 %');
 verifier(lotHebdo(999, 2000) === 199, 'arrondi vers le bas, jamais a decouvert');
 
+// Decoupage reel : prix hebdo symbolique, tout le reste dans la cagnotte.
+const HEBDO_AUTO = 250, SAISON_AUTO = 5750;
+const HEBDO_IMMO = 170, SAISON_IMMO = 5830;
+verifier(HEBDO_AUTO + SAISON_AUTO === 6000, 'voiture : reversement total 60 %');
+verifier(HEBDO_IMMO + SAISON_IMMO === 6000, 'immobilier : reversement total 60 %');
+
+// Voiture : 200 joueurs a CHF 50, 4 manches.
+const collecteAuto = Array(4).fill(200 * 5000);
+verifier(lotHebdo(collecteAuto[0], HEBDO_AUTO) === 25000, 'voiture : prix hebdo CHF 250');
+verifier(cagnotteSaison(collecteAuto, SAISON_AUTO) === 2300000, 'voiture : cagnotte CHF 23 000');
+
+// Immobilier : 200 joueurs a CHF 300, 4 manches.
+const collecteImmo = Array(4).fill(200 * 30000);
+verifier(lotHebdo(collecteImmo[0], HEBDO_IMMO) === 102000, 'immobilier : prix hebdo CHF 1 020');
+verifier(cagnotteSaison(collecteImmo, SAISON_IMMO) === 13992000, 'immobilier : cagnotte CHF 139 920');
+
+// Regle intangible : jamais plus que ce qui est encaisse.
+for (const c of [collecteAuto, collecteImmo]) {
+  const total = c.reduce((a, b) => a + b, 0);
+  const verse = lotHebdo(c[0], HEBDO_AUTO) * 4 + cagnotteSaison(c, SAISON_AUTO);
+  verifier(verse < total, 'jamais a decouvert sur un tour');
+}
+
 bilan('scores');
