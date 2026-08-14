@@ -113,12 +113,58 @@ async function revelerManche(env, mancheId) {
     );
   }
 
-  const saison = await un(env, 'SELECT nb_manches FROM saisons WHERE id = ?', manche.saison_id);
+  const saison = await un(
+    env,
+    `SELECT nb_manches, seuil_eligibilite_bps, prix_hebdo_sur_cumul, reversement_hebdo_bps
+     FROM saisons WHERE id = ?`,
+    manche.saison_id
+  );
+  // Eligibilite a 80 % des manches : rater deux semaines ne doit pas eliminer.
+  const manchesRequises = Math.ceil((saison.nb_manches * saison.seuil_eligibilite_bps) / 10000);
   await executer(
     env,
     'UPDATE classements SET eligible = (manches_jouees >= ?) WHERE saison_id = ?',
-    saison.nb_manches,
+    manchesRequises,
     manche.saison_id
+  );
+
+  // Prix hebdomadaire : au leader du classement CUMULE, pas au meilleur de la semaine.
+  // Avec peu de biens par manche, le meilleur de la semaine serait designe par le hasard.
+  const biensCumules = (await un(
+    env,
+    `SELECT COUNT(*) n FROM manche_biens mb JOIN manches m ON m.id = mb.manche_id
+     WHERE m.saison_id = ? AND (m.statut = 'revelee' OR m.id = ?)`,
+    manche.saison_id,
+    mancheId
+  )).n;
+  const montantHebdo = Math.floor((manche.collecte_cts * saison.reversement_hebdo_bps) / 10000);
+  let laureat = null;
+  if (saison.prix_hebdo_sur_cumul) {
+    laureat = await un(
+      env,
+      `SELECT joueur_id FROM classements WHERE saison_id = ?
+       ORDER BY erreur_cumulee_bps ASC, manches_jouees DESC LIMIT 1`,
+      manche.saison_id
+    );
+  } else {
+    laureat = await un(
+      env,
+      `SELECT p.joueur_id FROM scores sc JOIN participations p ON p.id = sc.participation_id
+       WHERE p.manche_id = ? ORDER BY sc.rang ASC LIMIT 1`,
+      mancheId
+    );
+  }
+  await executer(
+    env,
+    `INSERT INTO prix_hebdo (manche_id, joueur_id, montant_cts, base, biens_cumules, attribue_le)
+     VALUES (?,?,?,?,?,?)
+     ON CONFLICT(manche_id) DO UPDATE SET joueur_id=excluded.joueur_id,
+       montant_cts=excluded.montant_cts, biens_cumules=excluded.biens_cumules`,
+    mancheId, laureat?.joueur_id ?? null, montantHebdo,
+    saison.prix_hebdo_sur_cumul ? 'cumul' : 'manche', biensCumules, maintenant()
+  );
+  await executer(
+    env, "UPDATE manches SET lot_hebdo_cts = ? WHERE id = ?", montantHebdo, mancheId
   );
 
   for (const bien of biens) {
@@ -508,13 +554,27 @@ async function routerAdmin(requete, env, url) {
         })
       );
     }
-    const controle = controlerManche(selection, { participantsAttendus: attendus });
+    const saisonId = Number(form.get('saison_id'));
+    const saisonChoisie = await un(env, 'SELECT * FROM saisons WHERE id = ?', saisonId);
+    const dejaJoues = (await un(
+      env,
+      `SELECT COUNT(*) n FROM manche_biens mb JOIN manches m ON m.id = mb.manche_id
+       WHERE m.saison_id = ?`,
+      saisonId
+    )).n;
+    const manchesFaites = (await un(
+      env, 'SELECT COUNT(*) n FROM manches WHERE saison_id = ?', saisonId
+    )).n;
+    const controle = controlerManche(selection, {
+      participantsAttendus: attendus,
+      biensDejaJoues: dejaJoues,
+      manchesRestantes: Math.max(0, (saisonChoisie?.nb_manches ?? 4) - manchesFaites - 1),
+    });
     if (String(form.get('action')) !== 'sceller' || !controle.valide) {
       return reponseHtml(
         vueAdmin.constructeur({ verticale, biens: disponibles, selection: choisis, controle, saisons })
       );
     }
-    const saisonId = Number(form.get('saison_id'));
     const rang = ((await un(env, 'SELECT COALESCE(MAX(rang),0) r FROM manches WHERE saison_id=?', saisonId)).r) + 1;
     const { sel, empreinte } = await sceller(selection);
     await executer(

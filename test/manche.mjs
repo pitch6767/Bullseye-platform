@@ -54,4 +54,37 @@ verifier(concentrationPartenaires([]).part_max_bps === 0, 'liste vide sans divis
 verifier(ecartReferenceBps(2200000, 2000000) === 1000, 'ecart reference 10 %');
 verifier(ecartReferenceBps(2000000, null) === null, 'sans reference, pas d ecart');
 
+
+
+// --- saisons longues a faible nombre de biens par manche ---------------------
+import { saisonSuffisante, biensCumulesSaison } from '../src/manche.js';
+
+verifier(biensCumulesSaison(3, 13) === 39, 'immobilier trimestriel : 39 biens cumules');
+verifier(biensCumulesSaison(12, 4) === 48, 'voiture mensuelle : 48 biens cumules');
+
+const immo = saisonSuffisante(3, 13, 200);
+verifier(immo.suffisante, '3 biens sur 13 manches suffisent pour 200 joueurs');
+verifier(immo.cumul === 39 && immo.requis === 12, 'cumul 39 contre 12 requis');
+
+const immoCourt = saisonSuffisante(3, 4, 200);
+verifier(immoCourt.cumul === 12, '3 biens sur 4 manches donne 12');
+verifier(immoCourt.suffisante, 'juste au seuil pour 200 joueurs');
+
+const insuffisant = saisonSuffisante(3, 2, 700);
+verifier(!insuffisant.suffisante, '6 biens insuffisants pour 700 joueurs');
+
+// Le controle projette le cumul de la saison, pas la manche isolee.
+const troisBiens = [bien(1, 1), bien(2, 2), bien(3, 3)];
+const isolee = controlerManche(troisBiens, { participantsAttendus: 200 });
+verifier(isolee.avertissements.some((m) => m.includes('cumulés')), 'manche isolee de 3 biens avertit');
+
+const enSaison = controlerManche(troisBiens, {
+  participantsAttendus: 200, biensDejaJoues: 30, manchesRestantes: 2,
+});
+verifier(enSaison.valide, 'meme manche valide dans une saison longue');
+verifier(
+  !enSaison.avertissements.some((m) => m.includes('cumulés')),
+  'aucun avertissement quand le cumul projete suffit'
+);
+
 bilan('manche');

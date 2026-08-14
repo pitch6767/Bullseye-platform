@@ -13,10 +13,26 @@ export function biensMinimum(participantsAttendus) {
   return 20;
 }
 
+// Le minimum s'apprecie sur le CUMUL de la saison, pas sur la manche isolee.
+// Une saison de 13 manches a 3 biens produit 39 mesures : le hasard s'annule.
+// Une manche isolee de 3 biens ne departagerait rien.
+export function biensCumulesSaison(biensParManche, nbManches) {
+  return biensParManche * nbManches;
+}
+
+export function saisonSuffisante(biensParManche, nbManches, participantsAttendus) {
+  const cumul = biensCumulesSaison(biensParManche, nbManches);
+  const requis = biensMinimum(participantsAttendus);
+  return { cumul, requis, suffisante: cumul >= requis };
+}
+
 // biens : [{id, partenaire_id, statut, prix_reel_cts, valeur_reference_cts, ecart_reference_bps}]
+// options.biensDejaJoues : biens deja reveles dans la saison en cours.
 export function controlerManche(biens, options = {}) {
   const participants = options.participantsAttendus ?? 0;
   const minimum = options.biensMinimum ?? biensMinimum(participants);
+  const dejaJoues = options.biensDejaJoues ?? 0;
+  const manchesRestantes = options.manchesRestantes ?? 0;
   const bloquants = [];
   const avertissements = [];
 
@@ -50,9 +66,12 @@ export function controlerManche(biens, options = {}) {
     }
   }
 
-  if (biens.length < minimum) {
+  // Projection du cumul de la saison : c'est lui qui designe le gagnant.
+  const cumulProjete = dejaJoues + biens.length + manchesRestantes * biens.length;
+  if (cumulProjete < minimum) {
     avertissements.push(
-      `${biens.length} biens pour ${participants} participants attendus, minimum recommandé ${minimum}.`
+      `${cumulProjete} biens cumulés sur la saison pour ${participants} participants attendus, ` +
+        `minimum ${minimum}. Allonge la saison ou ajoute des biens.`
     );
   }
 

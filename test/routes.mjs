@@ -198,4 +198,22 @@ env._sqlite.prepare("UPDATE biens SET prix_reel_cts = 1 WHERE id = ?").run(ids[0
 verifier((await corpsDe(await appel('/verification/' + manche.id))).includes('ANOMALIE'),
   'une falsification posterieure est detectee publiquement');
 
+
+
+// --- prix hebdomadaire et eligibilite ---------------------------------------
+const prixHebdo = env._sqlite.prepare('SELECT * FROM prix_hebdo').get();
+verifier(prixHebdo, 'prix hebdomadaire attribue a la revelation');
+verifier(prixHebdo.base === 'cumul', 'attribue sur le classement cumule, pas la manche isolee');
+verifier(prixHebdo.biens_cumules === 8, 'huit biens cumules pris en compte');
+const meilleur = env._sqlite
+  .prepare('SELECT joueur_id FROM classements ORDER BY erreur_cumulee_bps ASC LIMIT 1').get();
+verifier(prixHebdo.joueur_id === meilleur.joueur_id, 'le leader du cumul touche le prix');
+verifier(prixHebdo.montant_cts === 0, 'saison gratuite : prix a zero, jamais a decouvert');
+
+// Seuil d'eligibilite a 80 % : sur 2 manches, une seule suffit (ceil(2 * 0.8) = 2).
+const seuil = env._sqlite.prepare('SELECT nb_manches, seuil_eligibilite_bps FROM saisons').get();
+verifier(seuil.seuil_eligibilite_bps === 8000, 'seuil d eligibilite a 80 %');
+verifier(Math.ceil((seuil.nb_manches * seuil.seuil_eligibilite_bps) / 10000) === 2,
+  'deux manches requises sur une saison de deux');
+
 bilan('routes');
