@@ -5,4 +5,4 @@ compatibility_date = "2026-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "bullseye"
-database_id = "REMPLACER_PAR_TON_DATABASE_ID"
+database_id = "e480eae2-1cce-483b-ada8-0f95234acc3f"
