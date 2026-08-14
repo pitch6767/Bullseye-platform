@@ -1,0 +1,12 @@
+{
+  "name": "bullseye-platform",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/scores.mjs && node test/scellement.mjs && node test/manche.mjs && node test/routes.mjs"
+  },
+  "devDependencies": {
+    "better-sqlite3": "^11.0.0"
+  }
+}
